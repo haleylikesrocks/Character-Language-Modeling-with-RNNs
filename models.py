@@ -68,7 +68,11 @@ def preprocess(list_of_exs, lables, index):
     data = []
     for i in range(len(list_of_exs)):
         for item in list_of_exs[i]:
-            data.append((item, lables[i]))
+            letters = []
+            for letter in item:
+                letter_idx = index.index_of(letter) if index.index_of(letter) != -1 else -1
+                letters.append(letter_idx)
+            data.append((letters, lables[i]))
     return data
 
 def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, dev_vowel_exs, vocab_index):
@@ -97,9 +101,6 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     train_data = preprocess([train_cons_exs, train_vowel_exs], [0,1] ,vocab_index)
     dev_data = preprocess([dev_cons_exs, dev_vowel_exs], [0, 1], vocab_index)
 
-    print(train_data[-10:])
-    print(dev_data[-5:])
-
     for epoch in range(num_epochs):
         # print("entering epoch %i" % epoch)
         # set epoch level varibles
@@ -108,19 +109,19 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
 
         #Batch the data
         random.shuffle(train_data)
-        batches = get_batches(train_data, batch_size)
+        # batches = get_batches(train_data, batch_size)
 
-        for batch in batches:
-            batch_data, batch_label = get_labels_and_data(batch)
+        for data, label in train_data:
+            # batch_data, batch_label = get_labels_and_data(batch)
 
             model.zero_grad()
-            y_pred = model.forward(batch_data)
+            y_pred = model.forward(data)
             
             # calculate loss and accuracy
-            loss = loss_funct(y_pred, batch_label)
+            loss = loss_funct(y_pred, label)
             total_loss += loss
             for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                ret = 1 if y_pred[i].max(0)[1] == label else 0
                 accuracys.append(ret)
             
             # Computes the gradient and takes the optimizer step
