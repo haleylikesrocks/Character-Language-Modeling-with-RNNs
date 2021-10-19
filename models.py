@@ -1,6 +1,11 @@
 # models.py
 
+import torch
+import torch.nn as nn
+from torch import optim
 import numpy as np
+import random
+# was included
 import collections
 
 #####################
@@ -34,6 +39,14 @@ class FrequencyBasedClassifier(ConsonantVowelClassifier):
 
 
 class RNNClassifier(ConsonantVowelClassifier):
+    def __init__(self, embeddings, inp=300, hid=32, out=2):
+        super().__init__()
+
+        self.embedding = nn.Embedding(26, 50, padding_idx=0)
+        self.V = nn.Linear(inp, hid)
+        self.g = nn.ReLU()
+        self.mid = nn.Linear(hid,hid)
+        self.W = nn.Linear(hid, out)
     def predict(self, context):
         raise Exception("Implement me")
 
@@ -58,7 +71,68 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     :param vocab_index: an Indexer of the character vocabulary (27 characters)
     :return: an RNNClassifier instance trained on the given data
     """
-    raise Exception("Implement me")
+    # Define hyper parmeters and model
+    num_epochs = 8
+    initial_learning_rate = 0.01
+    batch_size = 32
+
+    # Model specifications
+    model = DANClassifier(word_embeddings)
+    optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
+    loss_funct = torch.nn.CrossEntropyLoss()
+
+    # Preprocess data
+    print("Preprocessing the Training data")
+    train_data = []
+    for item in train_exs: #for testing
+        train_data.append((model.preprocess(item.words), item.label))
+    
+    dev_data = []
+    for item in dev_exs:
+        dev_data.append((model.preprocess(item.words), item.label))
+
+    for epoch in range(num_epochs):
+        # print("entering epoch %i" % epoch)
+        # set epoch level varibles
+        total_loss = 0.0
+        accuracys = []
+
+        #Batch the data
+        random.shuffle(train_data)
+        batches = get_batches(train_data, batch_size)
+
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
+
+            model.zero_grad()
+            y_pred = model.forward(batch_data)
+            
+            # calculate loss and accuracy
+            loss = loss_funct(y_pred, batch_label)
+            total_loss += loss
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                accuracys.append(ret)
+            
+            # Computes the gradient and takes the optimizer step
+            loss.backward()
+            optimizer.step()
+
+        # Dev Testing
+        dev_accuracys = []
+        batches = get_batches(dev_data, batch_size)
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
+            y_pred = model.forward(batch_data)
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                dev_accuracys.append(ret)
+
+        print("Total loss on epoch %i: %f" % (epoch, total_loss))
+        print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
+        print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
+
+    return model
 
 
 #####################
@@ -120,4 +194,65 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :param vocab_index: an Indexer of the character vocabulary (27 characters)
     :return: an RNNLanguageModel instance trained on the given data
     """
-    raise Exception("Implement me")
+    # Define hyper parmeters and model
+    num_epochs = 8
+    initial_learning_rate = 0.01
+    batch_size = 32
+
+    # Model specifications
+    model = DANClassifier(word_embeddings)
+    optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
+    loss_funct = torch.nn.CrossEntropyLoss()
+
+    # Preprocess data
+    print("Preprocessing the Training data")
+    train_data = []
+    for item in train_exs: #for testing
+        train_data.append((model.preprocess(item.words), item.label))
+    
+    dev_data = []
+    for item in dev_exs:
+        dev_data.append((model.preprocess(item.words), item.label))
+
+    for epoch in range(num_epochs):
+        # print("entering epoch %i" % epoch)
+        # set epoch level varibles
+        total_loss = 0.0
+        accuracys = []
+
+        #Batch the data
+        random.shuffle(train_data)
+        batches = get_batches(train_data, batch_size)
+
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
+
+            model.zero_grad()
+            y_pred = model.forward(batch_data)
+            
+            # calculate loss and accuracy
+            loss = loss_funct(y_pred, batch_label)
+            total_loss += loss
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                accuracys.append(ret)
+            
+            # Computes the gradient and takes the optimizer step
+            loss.backward()
+            optimizer.step()
+
+        # Dev Testing
+        dev_accuracys = []
+        batches = get_batches(dev_data, batch_size)
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
+            y_pred = model.forward(batch_data)
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                dev_accuracys.append(ret)
+
+        print("Total loss on epoch %i: %f" % (epoch, total_loss))
+        print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
+        print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
+
+    return model
