@@ -47,7 +47,11 @@ class RNNClassifier(ConsonantVowelClassifier):
         self.g = nn.ReLU()
         self.mid = nn.Linear(hid,hid)
         self.W = nn.Linear(hid, out)
+        self.classify = nn.Softmax(out)
+
     def predict(self, context):
+        y = self.embedding(context)
+
         raise Exception("Implement me")
 
 
@@ -60,6 +64,9 @@ def train_frequency_based_classifier(cons_exs, vowel_exs):
         vowel_counts[ex[-1]] += 1
     return FrequencyBasedClassifier(consonant_counts, vowel_counts)
 
+def preprocess(str, index):
+
+
 
 def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, dev_vowel_exs, vocab_index):
     """
@@ -71,21 +78,23 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     :param vocab_index: an Indexer of the character vocabulary (27 characters)
     :return: an RNNClassifier instance trained on the given data
     """
+
+    
     # Define hyper parmeters and model
     num_epochs = 8
     initial_learning_rate = 0.01
     batch_size = 32
 
     # Model specifications
-    model = DANClassifier(word_embeddings)
+    model = RNNClassifier()
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.CrossEntropyLoss()
+    loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used
 
     # Preprocess data
     print("Preprocessing the Training data")
     train_data = []
     for item in train_exs: #for testing
-        train_data.append((model.preprocess(item.words), item.label))
+        train_data.append(preprocess(item.words), item.label))
     
     dev_data = []
     for item in dev_exs:
@@ -138,6 +147,14 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
 #####################
 # MODELS FOR PART 2 #
 #####################
+
+# predict dirtbition over all possible next characters
+# use "run santiy check" -> checks that produces valid probalities 
+# need to evalue with perplexity
+# normatization test -> makes sure sume to one 
+# check that they are probalities that normalize 
+# if fail you def have a bug
+
 
 
 class LanguageModel(object):
