@@ -1,8 +1,8 @@
 # models.py
 
-import torch
-import torch.nn as nn
-from torch import optim
+# import torch
+# import torch.nn as nn
+# from torch import optim
 import numpy as np
 import random
 # was included
@@ -64,9 +64,12 @@ def train_frequency_based_classifier(cons_exs, vowel_exs):
         vowel_counts[ex[-1]] += 1
     return FrequencyBasedClassifier(consonant_counts, vowel_counts)
 
-def preprocess(str, index):
-
-
+def preprocess(list_of_exs, lables, index):
+    data = []
+    for i in range(len(list_of_exs)):
+        for item in list_of_exs[i]:
+            data.append((item, lables[i]))
+    return data
 
 def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, dev_vowel_exs, vocab_index):
     """
@@ -78,7 +81,6 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     :param vocab_index: an Indexer of the character vocabulary (27 characters)
     :return: an RNNClassifier instance trained on the given data
     """
-
     
     # Define hyper parmeters and model
     num_epochs = 8
@@ -86,19 +88,17 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     batch_size = 32
 
     # Model specifications
-    model = RNNClassifier()
-    optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used
+    # model = RNNClassifier()
+    # optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
+    # loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
 
     # Preprocess data
     print("Preprocessing the Training data")
-    train_data = []
-    for item in train_exs: #for testing
-        train_data.append(preprocess(item.words), item.label))
-    
-    dev_data = []
-    for item in dev_exs:
-        dev_data.append((model.preprocess(item.words), item.label))
+    train_data = preprocess([train_cons_exs, train_vowel_exs], [0,1] ,vocab_index)
+    dev_data = preprocess([dev_cons_exs, dev_vowel_exs], [0, 1], vocab_index)
+
+    print(train_data[-10:])
+    print(dev_data[-5:])
 
     for epoch in range(num_epochs):
         # print("entering epoch %i" % epoch)
