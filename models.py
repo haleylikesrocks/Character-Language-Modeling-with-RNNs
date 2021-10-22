@@ -38,22 +38,34 @@ class FrequencyBasedClassifier(ConsonantVowelClassifier):
             return 1
 
 
-class RNNClassifier(ConsonantVowelClassifier):
+class RNNClassifier(nn.Module):
     def __init__(self, inp=300, hid=32, out=2):
-        super().__init__()
+        super(RNNClassifier, self).__init__()
 
-        self.embedding = nn.Embedding(26, 50)
-        self.lstm = torch.nn.LSTM(50, 20, 2)
-        self.h0 = torch.empty(2, 1, 20)
-        self.c0 = torch.empty(2, 1, 20)
-        self.h0 = nn.init.xavier_uniform(self.h0, gain=nn.init.calculate_gain('relu'))
-        self.c0 = nn.init.xavier_uniform(self.c0, gain=nn.init.calculate_gain('relu'))
+        self.linear1 = nn.Linear(440, 244)
+        self.tanh = nn.Tanh()
+        self.linear2 = nn.Linear(244, 48)
+        self.num_layers = 1
+        self.input_size = 40
+        self.hidden_size = 96
+        self.isBidirectional = False
+        self.rnn = nn.GRU(self.input_size, self.hidden_size, self.num_layers, batch_first=True, bidirectional = self.isBidirectional)
+        self.linear3 = nn.Linear(self.hidden_size, 48)
+    
+    def forward(self, x):
+        #100, 11, 40 batch_size, number_of_steps, number_of_features
+        if self.isBidirectional:
+            hidden = torch.zeros((self.num_layers * 2, len(x), self.hidden_size))
+            output, hidden_state = self.rnn(x, hidden)
+            return self.linear3(hidden_state)[self.num_layers * 2 - 1]
+        else:
+            hidden = torch.zeros((self.num_layers, len(x), self.hidden_size))
+            output, hidden_state = self.rnn(x, hidden)
+            return self.linear3(hidden_state)[self.num_layers - 1]
 
     def predict(self, context):
-        x, h_i, c_i = context
-        y = self.embedding(x)
 
-        return self.lstm(y, (self.h0, self.c0))
+        return self.forward(context)
 
 
 def train_frequency_based_classifier(cons_exs, vowel_exs):
@@ -110,7 +122,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     
     # Define hyper parmeters and model
     num_epochs = 8
-    initial_learning_rate = 0.01
+    initial_learning_rate = 0.0001
     batch_size = 32
 
     # Model specifications
@@ -124,8 +136,6 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     dev_data = preprocess([dev_cons_exs, dev_vowel_exs], [0, 1], vocab_index)
 
     for epoch in range(num_epochs):
-        # print("entering epoch %i" % epoch)
-        # set epoch level varibles
         total_loss = 0.0
         accuracys = []
 
@@ -136,17 +146,16 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
         for batch in batches:
             batch_data, batch_label = get_labels_and_data(batch)
 
-            model.zero_grad()
-            y_pred = model.forward(data)
+            optimizer.zero_grad()
+            y_pred = model.forward(batch_data)
             
             # calculate loss and accuracy
-            loss = loss_funct(y_pred, label)
+            loss = loss_funct(y_pred, batch_label)
             total_loss += loss
-            # for i in range(len(batch)):
-            #     ret = 1 if y_pred[i].max(0)[1] == label else 0
-            #     accuracys.append(ret)
-            ret = 1 if y_pred[i].max(0)[1] == label else 0
-            accuracys.append(ret)
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == label else 0
+                accuracys.append(ret)
+ 
             # Computes the gradient and takes the optimizer step
             loss.backward()
             optimizer.step()
