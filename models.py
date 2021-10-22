@@ -42,6 +42,7 @@ class RNNClassifier(nn.Module):
     def __init__(self, inp=300, hid=32, out=2):
         super(RNNClassifier, self).__init__()
 
+        self.embedding = nn.Embedding(27, 40)
         self.linear1 = nn.Linear(440, 244)
         self.tanh = nn.Tanh()
         self.linear2 = nn.Linear(244, 48)
@@ -50,7 +51,8 @@ class RNNClassifier(nn.Module):
         self.hidden_size = 96
         self.isBidirectional = False
         self.rnn = nn.GRU(self.input_size, self.hidden_size, self.num_layers, batch_first=True, bidirectional = self.isBidirectional)
-        self.linear3 = nn.Linear(self.hidden_size, 48)
+        self.linear3 = nn.Linear(self.hidden_size, 2)
+        self.soft = nn.LogSoftmax(dim=1) # because 0 is the batch
     
     def forward(self, x):
         #100, 11, 40 batch_size, number_of_steps, number_of_features
@@ -60,6 +62,7 @@ class RNNClassifier(nn.Module):
             return self.linear3(hidden_state)[self.num_layers * 2 - 1]
         else:
             hidden = torch.zeros((self.num_layers, len(x), self.hidden_size))
+            x = self.embedding(x)
             output, hidden_state = self.rnn(x, hidden)
             return self.linear3(hidden_state)[self.num_layers - 1]
 
@@ -128,7 +131,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     # Model specifications
     model = RNNClassifier()
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
+    loss_funct = torch.nn.NLLLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
 
     # Preprocess data
     print("Preprocessing the Training data")
@@ -153,7 +156,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
             loss = loss_funct(y_pred, batch_label)
             total_loss += loss
             for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == label else 0
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
                 accuracys.append(ret)
  
             # Computes the gradient and takes the optimizer step
