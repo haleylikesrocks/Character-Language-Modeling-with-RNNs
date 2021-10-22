@@ -1,8 +1,8 @@
 # models.py
 
-# import torch
-# import torch.nn as nn
-# from torch import optim
+import torch
+import torch.nn as nn
+from torch import optim
 import numpy as np
 import random
 # was included
@@ -39,20 +39,21 @@ class FrequencyBasedClassifier(ConsonantVowelClassifier):
 
 
 class RNNClassifier(ConsonantVowelClassifier):
-    def __init__(self, embeddings, inp=300, hid=32, out=2):
+    def __init__(self, inp=300, hid=32, out=2):
         super().__init__()
 
-        self.embedding = nn.Embedding(26, 50, padding_idx=0)
-        self.V = nn.Linear(inp, hid)
-        self.g = nn.ReLU()
-        self.mid = nn.Linear(hid,hid)
-        self.W = nn.Linear(hid, out)
-        self.classify = nn.Softmax(out)
+        self.embedding = nn.Embedding(26, 50)
+        self.lstm = torch.nn.LSTM(50, 20, 2)
+        self.h0 = torch.empty(2, 1, 20)
+        self.c0 = torch.empty(2, 1, 20)
+        self.h0 = nn.init.xavier_uniform(self.h0, gain=nn.init.calculate_gain('relu'))
+        self.c0 = nn.init.xavier_uniform(self.c0, gain=nn.init.calculate_gain('relu'))
 
     def predict(self, context):
-        y = self.embedding(context)
+        x, h_i, c_i = context
+        y = self.embedding(x)
 
-        raise Exception("Implement me")
+        return self.lstm(y, (self.h0, self.c0))
 
 
 def train_frequency_based_classifier(cons_exs, vowel_exs):
@@ -75,6 +76,27 @@ def preprocess(list_of_exs, lables, index):
             data.append((letters, lables[i]))
     return data
 
+def get_batches(data, batch_size):
+    count = 0
+    batches = []
+    count_down = len(data)
+    while count_down > batch_size:
+        batches.append(data[count:(count + batch_size)])
+        count += batch_size
+        count_down -= batch_size
+    if count_down > 1:
+        batches.append(data[count:])
+    
+    return batches
+
+def get_labels_and_data(batch):
+    labels = []
+    data = []
+    for datem, label in batch:
+        labels.append(label)
+        data.append(np.array(datem))
+    return torch.tensor(data), torch.tensor(labels)
+
 def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, dev_vowel_exs, vocab_index):
     """
     :param args: command-line args, passed through here for your convenience
@@ -92,9 +114,9 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     batch_size = 32
 
     # Model specifications
-    # model = RNNClassifier()
-    # optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    # loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
+    model = RNNClassifier()
+    optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
+    loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
 
     # Preprocess data
     print("Preprocessing the Training data")
@@ -109,10 +131,10 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
 
         #Batch the data
         random.shuffle(train_data)
-        # batches = get_batches(train_data, batch_size)
+        batches = get_batches(train_data, batch_size)
 
-        for data, label in train_data:
-            # batch_data, batch_label = get_labels_and_data(batch)
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
 
             model.zero_grad()
             y_pred = model.forward(data)
@@ -120,27 +142,28 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
             # calculate loss and accuracy
             loss = loss_funct(y_pred, label)
             total_loss += loss
-            for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == label else 0
-                accuracys.append(ret)
-            
+            # for i in range(len(batch)):
+            #     ret = 1 if y_pred[i].max(0)[1] == label else 0
+            #     accuracys.append(ret)
+            ret = 1 if y_pred[i].max(0)[1] == label else 0
+            accuracys.append(ret)
             # Computes the gradient and takes the optimizer step
             loss.backward()
             optimizer.step()
 
         # Dev Testing
-        dev_accuracys = []
-        batches = get_batches(dev_data, batch_size)
-        for batch in batches:
-            batch_data, batch_label = get_labels_and_data(batch)
-            y_pred = model.forward(batch_data)
-            for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
-                dev_accuracys.append(ret)
+        # dev_accuracys = []
+        # batches = get_batches(dev_data, batch_size)
+        # for batch in batches:
+        #     batch_data, batch_label = get_labels_and_data(batch)
+        #     y_pred = model.forward(batch_data)
+        #     for i in range(len(batch)):
+        #         ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+        #         dev_accuracys.append(ret)
 
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
         print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
-        print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
+        # print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
     return model
 
