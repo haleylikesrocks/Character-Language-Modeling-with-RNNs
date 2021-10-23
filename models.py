@@ -48,7 +48,7 @@ class RNNClassifier(nn.Module):
         self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
         self.init_weight()
         self.hidden2tag = nn.Linear(hidden_size, class_size)
-        self.soft_max = nn.Softmax(0)
+        self.soft = nn.LogSoftmax(0)
 
     def init_weight(self):
         nn.init.xavier_normal_(self.rnn.weight_hh_l0).type('torch.FloatTensor')
@@ -67,8 +67,10 @@ class RNNClassifier(nn.Module):
         return self.hidden2tag(hidden_state[-1])
 
     def predict(self, context):
-        preprocess(context, [0], self.vocab)
-        return self.forward(context)
+        input = preprocess(context, [0], self.vocab)
+        y_pred = self.forward(torch.tensor(input).unsqueeze(0))
+        y_pred = self.soft(y_pred.squeeze())
+        return y_pred.max(0)[1]
 
 
 def train_frequency_based_classifier(cons_exs, vowel_exs):
@@ -82,13 +84,18 @@ def train_frequency_based_classifier(cons_exs, vowel_exs):
 
 def preprocess(list_of_exs, lables, index):
     data = []
-    for i in range(len(list_of_exs)):
-        for item in list_of_exs[i]:
-            letters = []
-            for letter in item:
-                letter_idx = index.index_of(letter) if index.index_of(letter) != -1 else -1
-                letters.append(letter_idx)
-            data.append((letters, lables[i])) if lables != [0] else  data.append(torch.tensor(letters))
+    if lables == [0]:
+        for letter in list_of_exs:
+            letter_idx = index.index_of(letter) if index.index_of(letter) != -1 else -1
+            data.append(letter_idx)  
+    else:
+        for i in range(len(list_of_exs)):
+            for item in list_of_exs[i]:
+                letters = []
+                for letter in item:
+                    letter_idx = index.index_of(letter) if index.index_of(letter) != -1 else -1
+                    letters.append(letter_idx)
+                data.append((letters, lables[i]))
     return data
 
 def get_batches(data, batch_size):
@@ -124,7 +131,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     """
     
     # Define hyper parmeters and model
-    num_epochs = 10
+    num_epochs = 10 #10 is better to turn in
     initial_learning_rate = 0.001
     batch_size = 32
 
