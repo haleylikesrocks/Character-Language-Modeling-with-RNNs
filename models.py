@@ -201,7 +201,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
 
 class LanguageModel(object):
 
-    def get_next_char_log_probs(self, context) -> np.ndarray:
+    def get_next_char_log_probs(self, context): # -> np.ndarray:
         """
         Returns a log probability distribution over the next characters given a context.
         The log should be base e
@@ -211,7 +211,7 @@ class LanguageModel(object):
         raise Exception("Only implemented in subclasses")
 
 
-    def get_log_prob_sequence(self, next_chars, context) -> float:
+    def get_log_prob_sequence(self, next_chars, context): # -> float:
         """
         Scores a bunch of characters following context. That is, returns
         log P(nc1, nc2, nc3, ... | context) = log P(nc1 | context) + log P(nc2 | context, nc1), ...
@@ -234,15 +234,56 @@ class UniformLanguageModel(LanguageModel):
         return np.log(1.0/self.voc_size) * len(next_chars)
 
 
-class RNNLanguageModel(LanguageModel):
-    def __init__(self):
-        raise Exception("Implement me")
+class RNNLanguageModel(nn.Module):
+    def __init__(self, vocab_index, dict_size=27, input_size=50, hidden_size=30, class_size=27): 
+        super(RNNLanguageModel, self).__init__()    
+        self.word_embedding = nn.Embedding(dict_size, input_size)
+        self.vocab = vocab_index
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
+        self.init_weight()
+        self.hidden2tag = nn.Linear(hidden_size, class_size)
+        self.soft = nn.LogSoftmax(2)
+
+    def init_weight(self):
+        nn.init.xavier_normal_(self.rnn.weight_hh_l0).type('torch.FloatTensor')
+        nn.init.xavier_normal_(self.rnn.weight_ih_l0).type('torch.FloatTensor')
+        # nn.init.xavier_normal_(self.rnn.bias_hh_l0)
+        # nn.init.xavier_normal_(self.rnn.bias_ih_l0)
+
+    def forward(self, input):
+        embedded_input = self.word_embedding(input)
+        # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        init_state = (torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'))
+        output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
+        
+        # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        return self.soft(self.hidden2tag(output))
 
     def get_next_char_log_probs(self, context):
         raise Exception("Implement me")
 
     def get_log_prob_sequence(self, next_chars, context):
         raise Exception("Implement me")
+
+def lm_preprocess(text, chunk_size, vocab):
+    count = 0
+    data = []
+    indexed_text = []
+    for letter in text:
+        indexed_text.append(vocab.index_of(letter))
+        
+    while count+chunk_size < len(text):
+        chunk = indexed_text[count:count + chunk_size]
+        chunk.insert(26, 0)
+        label = indexed_text[count:count + chunk_size + 1]
+        data.append((chunk, label))
+        count += chunk_size
+
+    return data
+    
 
 
 def train_lm(args, train_text, dev_text, vocab_index):
@@ -254,32 +295,27 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 8
-    initial_learning_rate = 0.01
+    num_epochs = 2
+    initial_learning_rate = 0.0001
     batch_size = 32
+    chunk_size = 10
 
-    # Model specifications
-    model = DANClassifier(word_embeddings)
+    ## Create Dataset
+    train_data = lm_preprocess(train_text, chunk_size, vocab_index)
+    dev_data = lm_preprocess(dev_text, chunk_size, vocab_index)
+
+    ## Model specifications
+    model = RNNLanguageModel(vocab_index)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.CrossEntropyLoss()
+    loss_funct = torch.nn.NLLLoss()
 
-    # Preprocess data
-    print("Preprocessing the Training data")
-    train_data = []
-    for item in train_exs: #for testing
-        train_data.append((model.preprocess(item.words), item.label))
-    
-    dev_data = []
-    for item in dev_exs:
-        dev_data.append((model.preprocess(item.words), item.label))
 
     for epoch in range(num_epochs):
-        # print("entering epoch %i" % epoch)
-        # set epoch level varibles
+        ## set epoch level varibles
         total_loss = 0.0
         accuracys = []
 
-        #Batch the data
+        ## Batch and Shuffle the Data
         random.shuffle(train_data)
         batches = get_batches(train_data, batch_size)
 
@@ -314,4 +350,14 @@ def train_lm(args, train_text, dev_text, vocab_index):
         print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
         print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
+        # def print_evaluation(text, lm, vocab_index, output_bundle_path):
+
+        # sane = run_sanity_check(lm, vocab_index)
+        # log_prob = lm.get_log_prob_sequence(text, " ")
+        # avg_log_prob = log_prob/len(text)
+        # perplexity = np.exp(-log_prob / len(text))
+        # # data = {'sane': sane, 'log_prob': log_prob, 'avg_log_prob': avg_log_prob, 'perplexity': perplexity}
+        # data = {'sane': sane, 'normalizes': normalization_test(lm, vocab_index), 'log_prob': log_prob, 'avg_log_prob': avg_log_prob, 'perplexity': perplexity}
+        # print("=====Results=====")
+        # print(json.dumps(data, indent=2))
     return model
