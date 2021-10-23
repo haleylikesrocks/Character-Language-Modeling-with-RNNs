@@ -39,9 +39,10 @@ class FrequencyBasedClassifier(ConsonantVowelClassifier):
 
 
 class RNNClassifier(nn.Module):
-    def __init__(self, dict_size=27, input_size=50, hidden_size=30, class_size=2, dropout=False):
+    def __init__(self, vocab_index, dict_size=27, input_size=50, hidden_size=30, class_size=2):
         super(RNNClassifier, self).__init__()
         self.word_embedding = nn.Embedding(dict_size, input_size)
+        self.vocab = vocab_index
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
@@ -66,7 +67,7 @@ class RNNClassifier(nn.Module):
         return self.hidden2tag(hidden_state[-1])
 
     def predict(self, context):
-
+        preprocess(context, [0], self.vocab)
         return self.forward(context)
 
 
@@ -87,7 +88,7 @@ def preprocess(list_of_exs, lables, index):
             for letter in item:
                 letter_idx = index.index_of(letter) if index.index_of(letter) != -1 else -1
                 letters.append(letter_idx)
-            data.append((letters, lables[i]))
+            data.append((letters, lables[i])) if lables != [0] else  data.append(torch.tensor(letters))
     return data
 
 def get_batches(data, batch_size):
@@ -123,12 +124,12 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     """
     
     # Define hyper parmeters and model
-    num_epochs = 8
-    initial_learning_rate = 0.0001
+    num_epochs = 10
+    initial_learning_rate = 0.001
     batch_size = 32
 
     # Model specifications
-    model = RNNClassifier()
+    model = RNNClassifier(vocab_index)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
     loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
 
@@ -174,7 +175,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
 
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
         print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
-        # print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
+        print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
     return model
 
