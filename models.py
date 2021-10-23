@@ -39,32 +39,31 @@ class FrequencyBasedClassifier(ConsonantVowelClassifier):
 
 
 class RNNClassifier(nn.Module):
-    def __init__(self, inp=300, hid=32, out=2):
+    def __init__(self, dict_size=27, input_size=50, hidden_size=30, class_size=2, dropout=False):
         super(RNNClassifier, self).__init__()
+        self.word_embedding = nn.Embedding(dict_size, input_size)
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
+        self.init_weight()
+        self.hidden2tag = nn.Linear(hidden_size, class_size)
+        self.soft_max = nn.Softmax(0)
 
-        self.embedding = nn.Embedding(27, 40)
-        self.linear1 = nn.Linear(440, 244)
-        self.tanh = nn.Tanh()
-        self.linear2 = nn.Linear(244, 48)
-        self.num_layers = 1
-        self.input_size = 40
-        self.hidden_size = 96
-        self.isBidirectional = False
-        self.rnn = nn.GRU(self.input_size, self.hidden_size, self.num_layers, batch_first=True, bidirectional = self.isBidirectional)
-        self.linear3 = nn.Linear(self.hidden_size, 2)
-        self.soft = nn.LogSoftmax(dim=1) # because 0 is the batch
-    
-    def forward(self, x):
-        #100, 11, 40 batch_size, number_of_steps, number_of_features
-        if self.isBidirectional:
-            hidden = torch.zeros((self.num_layers * 2, len(x), self.hidden_size))
-            output, hidden_state = self.rnn(x, hidden)
-            return self.linear3(hidden_state)[self.num_layers * 2 - 1]
-        else:
-            hidden = torch.zeros((self.num_layers, len(x), self.hidden_size))
-            x = self.embedding(x)
-            output, hidden_state = self.rnn(x, hidden)
-            return self.linear3(hidden_state)[self.num_layers - 1]
+    def init_weight(self):
+        nn.init.xavier_normal_(self.rnn.weight_hh_l0).type('torch.FloatTensor')
+        nn.init.xavier_normal_(self.rnn.weight_ih_l0).type('torch.FloatTensor')
+        # nn.init.xavier_normal_(self.rnn.bias_hh_l0)
+        # nn.init.xavier_normal_(self.rnn.bias_ih_l0)
+
+    def forward(self, input):
+        embedded_input = self.word_embedding(input)
+        # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        init_state = (torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'))
+        output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
+        
+        # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        return self.hidden2tag(hidden_state[-1])
 
     def predict(self, context):
 
@@ -131,7 +130,7 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
     # Model specifications
     model = RNNClassifier()
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.NLLLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
+    loss_funct = torch.nn.CrossEntropyLoss() # what loss functions should we used NLL is need calcte after softmax but befor loss
 
     # Preprocess data
     print("Preprocessing the Training data")
@@ -163,15 +162,15 @@ def train_rnn_classifier(args, train_cons_exs, train_vowel_exs, dev_cons_exs, de
             loss.backward()
             optimizer.step()
 
-        # Dev Testing
-        # dev_accuracys = []
-        # batches = get_batches(dev_data, batch_size)
-        # for batch in batches:
-        #     batch_data, batch_label = get_labels_and_data(batch)
-        #     y_pred = model.forward(batch_data)
-        #     for i in range(len(batch)):
-        #         ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
-        #         dev_accuracys.append(ret)
+        ## Dev Testing
+        dev_accuracys = []
+        batches = get_batches(dev_data, batch_size)
+        for batch in batches:
+            batch_data, batch_label = get_labels_and_data(batch)
+            y_pred = model.forward(batch_data)
+            for i in range(len(batch)):
+                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+                dev_accuracys.append(ret)
 
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
         print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
