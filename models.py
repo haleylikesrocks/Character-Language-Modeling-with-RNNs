@@ -20,7 +20,6 @@ class ConsonantVowelClassifier(object):
         """
         raise Exception("Only implemented in subclasses")
 
-
 class FrequencyBasedClassifier(ConsonantVowelClassifier):
     """
     Classifier based on the last letter before the space. If it has occurred with more consonants than vowels,
