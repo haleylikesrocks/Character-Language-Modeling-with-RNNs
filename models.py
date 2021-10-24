@@ -326,29 +326,30 @@ def train_lm(args, train_text, dev_text, vocab_index):
             y_pred = model.forward(batch_data)
             
             # calculate loss and accuracy
-            loss = loss_funct(y_pred, batch_label)
-            total_loss += loss
             for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
-                accuracys.append(ret)
+                loss = loss_funct(y_pred[i], batch_label[i])
+                total_loss += loss
+                for x in range(len(batch_label[i])):
+                    ret = 1 if y_pred[i][x].max(0)[1] == batch_label[i][x] else 0
+                    accuracys.append(ret)
             
             # Computes the gradient and takes the optimizer step
             loss.backward()
             optimizer.step()
 
         # Dev Testing
-        dev_accuracys = []
-        batches = get_batches(dev_data, batch_size)
-        for batch in batches:
-            batch_data, batch_label = get_labels_and_data(batch)
-            y_pred = model.forward(batch_data)
-            for i in range(len(batch)):
-                ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
-                dev_accuracys.append(ret)
+        # dev_accuracys = []
+        # batches = get_batches(dev_data, batch_size)
+        # for batch in batches:
+        #     batch_data, batch_label = get_labels_and_data(batch)
+        #     y_pred = model.forward(batch_data)
+        #     for i in range(len(batch)):
+        #         ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
+        #         dev_accuracys.append(ret)
 
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
         print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
-        print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
+        # print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
         # def print_evaluation(text, lm, vocab_index, output_bundle_path):
 
