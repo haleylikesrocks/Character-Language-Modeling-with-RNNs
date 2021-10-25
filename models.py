@@ -263,10 +263,29 @@ class RNNLanguageModel(nn.Module):
         return self.soft(self.hidden2tag(output))
 
     def get_next_char_log_probs(self, context):
-        raise Exception("Implement me")
+        context = self.vectorize(context)
+        output = self.forward(context)
+        return output[0][0][-1].numpy() ## double check this
 
     def get_log_prob_sequence(self, next_chars, context):
-        raise Exception("Implement me")
+        full_str = context+next_chars
+        full_str = self.vectorize(full_str)
+        output = self.forward(full_str)
+        log_probs = 0
+        for i in full_str:
+            if i < len(context):
+                next
+            else:
+                log_probs += output[0][i][full_str[i]]
+        return log_probs
+
+
+    
+    def vectorize(self, context):
+        vector = []
+        for char in context:
+            vector.append(self.vocab.index_of(char))
+        return torch.tensor(vector)
 
 def lm_preprocess(text, chunk_size, vocab):
     count = 0
