@@ -252,32 +252,35 @@ class RNNLanguageModel(nn.Module):
         # nn.init.xavier_normal_(self.rnn.bias_hh_l0)
         # nn.init.xavier_normal_(self.rnn.bias_ih_l0)
 
-    def forward(self, input):
+    def forward(self, input, batch=False):
         embedded_input = self.word_embedding(input)
+        batch_size = len(input) if batch else 1
         # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        init_state = (torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'),
-                      torch.from_numpy(np.zeros((2, len(input), self.hidden_size))).type('torch.FloatTensor'))
+        init_state = (torch.from_numpy(np.zeros((2, batch_size, self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((2, batch_size, self.hidden_size))).type('torch.FloatTensor'))
+        if not batch:
+            embedded_input = embedded_input.unsqueeze(0)
         output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
         
         # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
         return self.soft(self.hidden2tag(output))
 
     def get_next_char_log_probs(self, context):
-        context = self.vectorize(context)
-        output = self.forward(context)
-        return output[0][0][-1].numpy() ## double check this
+        context_vec = self.vectorize(context)
+        output = self.forward(context_vec)
+        return output[0][-1].detach().numpy() ## double check this
 
     def get_log_prob_sequence(self, next_chars, context):
         full_str = context+next_chars
-        full_str = self.vectorize(full_str)
-        output = self.forward(full_str)
+        print(full_str)
+        full_str_vec = self.vectorize(full_str)
+        print(full_str_vec)
+        print(full_str_vec[:-1])
+        output = self.forward(full_str_vec[:-1])
         log_probs = 0
-        for i in full_str:
-            if i < len(context):
-                next
-            else:
-                log_probs += output[0][i][full_str[i]]
-        return log_probs
+        for i in range(len(next_chars)):
+            log_probs += output[0][i + len(context) - 1][full_str_vec[i + len(context)]]
+        return log_probs.item()
 
 
     
@@ -342,7 +345,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
             batch_data, batch_label = get_labels_and_data(batch)
 
             model.zero_grad()
-            y_pred = model.forward(batch_data)
+            y_pred = model.forward(batch_data, batch=True)
             
             # calculate loss and accuracy
             for i in range(len(batch)):
