@@ -263,9 +263,7 @@ class RNNLanguageModel(nn.Module):
             embedded_input = embedded_input.unsqueeze(0)
         output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
         
-        # print(output.shape)
         y = self.hidden2tag(output)
-        # print(y.shape)
         # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
         return self.soft(y)
 
@@ -296,12 +294,12 @@ def lm_preprocess(text, chunk_size, vocab):
     for letter in text:
         indexed_text.append(vocab.index_of(letter))
         
-    while count+chunk_size < len(text):
+    while count+chunk_size + 1 < len(text):
         chunk = indexed_text[count:count + chunk_size]
         chunk.insert(26, 0)
-        label = indexed_text[count:count + chunk_size + 1]
+        label = indexed_text[count + chunk_size + 1]
         data.append((chunk, label))
-        count += chunk_size
+        count += 1
 
     return data
     
@@ -316,14 +314,13 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 5
+    num_epochs = 3
     initial_learning_rate = 1e-4
-    batch_size = 32
+    batch_size = 64
     chunk_size = 20
 
     ## Create Dataset
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
-    dev_data = lm_preprocess(dev_text, chunk_size, vocab_index)
 
     ## Model specifications
     model = RNNLanguageModel(vocab_index)
@@ -344,8 +341,8 @@ def train_lm(args, train_text, dev_text, vocab_index):
 
             model.zero_grad()
             y_pred = model.forward(batch_data, batch=True)
-            y_pred = torch.transpose(y_pred, 1, 2)
-            loss = loss_funct(y_pred, batch_label)
+            y_pred = torch.transpose(y_pred, 0, 1)
+            loss = loss_funct(y_pred[-1], batch_label)
             total_loss += loss
 
             # Computes the gradient and takes the optimizer step
