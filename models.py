@@ -1,5 +1,6 @@
 # models.py
 
+from functools import reduce
 import torch
 import torch.nn as nn
 from torch import optim
@@ -244,7 +245,7 @@ class RNNLanguageModel(nn.Module):
         self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
         self.init_weight()
         self.hidden2tag = nn.Linear(hidden_size, class_size)
-        self.soft = nn.LogSoftmax(2)
+        self.soft = nn.LogSoftmax(-1)
 
     def init_weight(self):
         nn.init.xavier_normal_(self.rnn.weight_hh_l0).type('torch.FloatTensor')
@@ -262,8 +263,11 @@ class RNNLanguageModel(nn.Module):
             embedded_input = embedded_input.unsqueeze(0)
         output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
         
+        # print(output.shape)
+        y = self.hidden2tag(output)
+        # print(y.shape)
         # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        return self.soft(self.hidden2tag(output))
+        return self.soft(y)
 
     def get_next_char_log_probs(self, context):
         context_vec = self.vectorize(context)
@@ -272,10 +276,7 @@ class RNNLanguageModel(nn.Module):
 
     def get_log_prob_sequence(self, next_chars, context):
         full_str = context+next_chars
-        print(full_str)
         full_str_vec = self.vectorize(full_str)
-        print(full_str_vec)
-        print(full_str_vec[:-1])
         output = self.forward(full_str_vec[:-1])
         log_probs = 0
         for i in range(len(next_chars)):
@@ -317,10 +318,10 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 2
+    num_epochs = 3
     initial_learning_rate = 0.0001
     batch_size = 32
-    chunk_size = 10
+    chunk_size = 20
 
     ## Create Dataset
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
@@ -329,7 +330,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
     ## Model specifications
     model = RNNLanguageModel(vocab_index)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.NLLLoss()
+    loss_funct = torch.nn.NLLLoss(reduce=True)
 
 
     for epoch in range(num_epochs):
@@ -346,14 +347,16 @@ def train_lm(args, train_text, dev_text, vocab_index):
 
             model.zero_grad()
             y_pred = model.forward(batch_data, batch=True)
-            
+            y_pred = torch.transpose(y_pred, 1, 2)
+            loss = loss_funct(y_pred, batch_label)
+            total_loss += loss
             # calculate loss and accuracy
-            for i in range(len(batch)):
-                loss = loss_funct(y_pred[i], batch_label[i])
-                total_loss += loss
-                for x in range(len(batch_label[i])):
-                    ret = 1 if y_pred[i][x].max(0)[1] == batch_label[i][x] else 0
-                    accuracys.append(ret)
+            # for i in range(len(batch)):
+            #     loss = loss_funct(y_pred[i], batch_label[i])
+            #     total_loss += loss
+            #     for x in range(len(batch_label[i])):
+            #         ret = 1 if y_pred[i][x].max(0)[1] == batch_label[i][x] else 0
+            #         accuracys.append(ret)
             
             # Computes the gradient and takes the optimizer step
             loss.backward()
@@ -370,7 +373,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
         #         dev_accuracys.append(ret)
 
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
-        print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
+        # print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
         # print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
         # def print_evaluation(text, lm, vocab_index, output_bundle_path):
