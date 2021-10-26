@@ -282,9 +282,7 @@ class RNNLanguageModel(nn.Module):
         for i in range(len(next_chars)):
             log_probs += output[0][i + len(context) - 1][full_str_vec[i + len(context)]]
         return log_probs.item()
-
-
-    
+   
     def vectorize(self, context):
         vector = []
         for char in context:
@@ -318,8 +316,8 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 3
-    initial_learning_rate = 0.0001
+    num_epochs = 5
+    initial_learning_rate = 1e-4
     batch_size = 32
     chunk_size = 20
 
@@ -336,7 +334,6 @@ def train_lm(args, train_text, dev_text, vocab_index):
     for epoch in range(num_epochs):
         ## set epoch level varibles
         total_loss = 0.0
-        accuracys = []
 
         ## Batch and Shuffle the Data
         random.shuffle(train_data)
@@ -350,40 +347,11 @@ def train_lm(args, train_text, dev_text, vocab_index):
             y_pred = torch.transpose(y_pred, 1, 2)
             loss = loss_funct(y_pred, batch_label)
             total_loss += loss
-            # calculate loss and accuracy
-            # for i in range(len(batch)):
-            #     loss = loss_funct(y_pred[i], batch_label[i])
-            #     total_loss += loss
-            #     for x in range(len(batch_label[i])):
-            #         ret = 1 if y_pred[i][x].max(0)[1] == batch_label[i][x] else 0
-            #         accuracys.append(ret)
-            
+
             # Computes the gradient and takes the optimizer step
             loss.backward()
             optimizer.step()
 
-        # Dev Testing
-        # dev_accuracys = []
-        # batches = get_batches(dev_data, batch_size)
-        # for batch in batches:
-        #     batch_data, batch_label = get_labels_and_data(batch)
-        #     y_pred = model.forward(batch_data)
-        #     for i in range(len(batch)):
-        #         ret = 1 if y_pred[i].max(0)[1] == batch_label[i] else 0
-        #         dev_accuracys.append(ret)
-
         print("Total loss on epoch %i: %f" % (epoch, total_loss))
-        # print("The traing set accuracy for epoch %i: %f" % (epoch, np.mean(accuracys)))
-        # print("The dev set accuracy for epoch %i: %f" % (epoch, np.mean(dev_accuracys)))
 
-        # def print_evaluation(text, lm, vocab_index, output_bundle_path):
-
-        # sane = run_sanity_check(lm, vocab_index)
-        # log_prob = lm.get_log_prob_sequence(text, " ")
-        # avg_log_prob = log_prob/len(text)
-        # perplexity = np.exp(-log_prob / len(text))
-        # # data = {'sane': sane, 'log_prob': log_prob, 'avg_log_prob': avg_log_prob, 'perplexity': perplexity}
-        # data = {'sane': sane, 'normalizes': normalization_test(lm, vocab_index), 'log_prob': log_prob, 'avg_log_prob': avg_log_prob, 'perplexity': perplexity}
-        # print("=====Results=====")
-        # print(json.dumps(data, indent=2))
     return model
