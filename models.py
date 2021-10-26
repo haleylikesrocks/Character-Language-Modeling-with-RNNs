@@ -323,7 +323,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
 
     ## Model specifications
-    model = RNNLanguageModel(vocab_index)
+    model = RNNLanguageModel(vocab_index, dict_size=27, input_size=150, hidden_size=64, class_size=27)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
     loss_funct = torch.nn.NLLLoss(reduce=True)
 
