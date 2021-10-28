@@ -242,7 +242,7 @@ class RNNLanguageModel(nn.Module):
         self.vocab = vocab_index
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True)
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=8, batch_first=True)
         self.init_weight()
         self.hidden2tag = nn.Linear(hidden_size, class_size)
         self.soft = nn.LogSoftmax(-1)
@@ -263,8 +263,8 @@ class RNNLanguageModel(nn.Module):
 
 
         # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        init_state = (torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'),
-                      torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'))
+        init_state = (torch.from_numpy(np.zeros((8, batch_size, self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((8, batch_size, self.hidden_size))).type('torch.FloatTensor'))
         # if not batch:
         #     embedded_input = embedded_input.unsqueeze(0)
         # print("the embedd dim ar currently", embedded_input.shape)
@@ -273,7 +273,7 @@ class RNNLanguageModel(nn.Module):
         y = self.hidden2tag(output)
         # print("the classification dim ar currently", y.shape)
         # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        y = self.soft(y)
+        # y = self.soft(y)
         # print("the soft dim ar currently", y.shape)
         return y
 
@@ -282,12 +282,14 @@ class RNNLanguageModel(nn.Module):
         context_vec = self.vectorize(context)
         
         output = self.forward(context_vec)
+        output = self.soft(output)
         return output[0][-1].detach().numpy() ## double check this
 
     def get_log_prob_sequence(self, next_chars, context):
         full_str = " "+context+next_chars
         full_str_vec = self.vectorize(full_str)
         output = self.forward(full_str_vec[:-1])
+        output = self.soft(output)
         log_probs = 0
         for i in range(len(next_chars)):
             log_probs += output[0][i + len(context)][full_str_vec[i + len(context)+ 1]]
@@ -337,7 +339,8 @@ def train_lm(args, train_text, dev_text, vocab_index):
     ## Model specifications
     model = RNNLanguageModel(vocab_index, dict_size=27, input_size=50, hidden_size=74, class_size=27)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.NLLLoss(reduction='mean')
+    # loss_funct = torch.nn.NLLLoss(reduction='mean')
+    loss_funct = torch.nn.CrossEntropyLoss(reduction='mean')
 
 
     for epoch in range(num_epochs):
