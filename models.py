@@ -242,7 +242,7 @@ class RNNLanguageModel(nn.Module):
         self.vocab = vocab_index
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=2, batch_first=True)
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True)
         self.init_weight()
         self.hidden2tag = nn.Linear(hidden_size, class_size)
         self.soft = nn.LogSoftmax(-1)
@@ -254,31 +254,43 @@ class RNNLanguageModel(nn.Module):
         # nn.init.xavier_normal_(self.rnn.bias_ih_l0)
 
     def forward(self, input, batch=False):
-        embedded_input = self.word_embedding(input)
-        batch_size = len(input) if batch else 1
-        # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        init_state = (torch.from_numpy(np.zeros((2, batch_size, self.hidden_size))).type('torch.FloatTensor'),
-                      torch.from_numpy(np.zeros((2, batch_size, self.hidden_size))).type('torch.FloatTensor'))
         if not batch:
-            embedded_input = embedded_input.unsqueeze(0)
-        output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
-        
-        y = self.hidden2tag(output)
-        # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        return self.soft(y)
+            input = input.unsqueeze(0)
+        batch_size = len(input) if batch else 1
 
-    def get_next_char_log_probs(self, context):
+        # print("the input dim ar currently", input.shape)
+        embedded_input = self.word_embedding(input)
+
+
+        # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        init_state = (torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'))
+        # if not batch:
+        #     embedded_input = embedded_input.unsqueeze(0)
+        # print("the embedd dim ar currently", embedded_input.shape)
+        output, (hidden_state, cell_state) = self.rnn(embedded_input, init_state)
+        # print("the output dim ar currently", output.shape)
+        y = self.hidden2tag(output)
+        # print("the classification dim ar currently", y.shape)
+        # Note: hidden_state is a 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
+        y = self.soft(y)
+        # print("the soft dim ar currently", y.shape)
+        return y
+
+    def get_next_char_log_probs(self, context): # insert sapce into input
+        context = ' '+ context
         context_vec = self.vectorize(context)
+        
         output = self.forward(context_vec)
         return output[0][-1].detach().numpy() ## double check this
 
     def get_log_prob_sequence(self, next_chars, context):
-        full_str = context+next_chars
+        full_str = " "+context+next_chars
         full_str_vec = self.vectorize(full_str)
         output = self.forward(full_str_vec[:-1])
         log_probs = 0
         for i in range(len(next_chars)):
-            log_probs += output[0][i + len(context) - 1][full_str_vec[i + len(context)]]
+            log_probs += output[0][i + len(context)][full_str_vec[i + len(context)+ 1]]
         return log_probs.item()
    
     def vectorize(self, context):
@@ -297,9 +309,9 @@ def lm_preprocess(text, chunk_size, vocab):
     while count+chunk_size + 1 < len(text):
         chunk = indexed_text[count:count + chunk_size]
         chunk.insert(26, 0)
-        label = indexed_text[count :count + chunk_size + 1]
+        label = indexed_text[count:count + chunk_size + 1]
         data.append((chunk, label))
-        count += 1
+        count += chunk_size
 
     return data
     
@@ -314,16 +326,16 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 3
+    num_epochs = 2
     initial_learning_rate = 1e-4
     batch_size = 64
-    chunk_size = 20
+    chunk_size = 10
 
     ## Create Dataset
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
 
     ## Model specifications
-    model = RNNLanguageModel(vocab_index, dict_size=27, input_size=150, hidden_size=64, class_size=27)
+    model = RNNLanguageModel(vocab_index, dict_size=27, input_size=50, hidden_size=74, class_size=27)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
     loss_funct = torch.nn.NLLLoss(reduction='mean')
 
@@ -340,8 +352,13 @@ def train_lm(args, train_text, dev_text, vocab_index):
             batch_data, batch_label = get_labels_and_data(batch)
 
             model.zero_grad()
+            # print("the input dim ar currently", batch_data.shape)
             y_pred = model.forward(batch_data, batch=True)
-            y_pred = torch.transpose(y_pred, 1, 2)
+            y_pred = y_pred.view(len(batch_data) * (chunk_size + 1), 27)
+            batch_label = batch_label.view(len(batch_data)  * (chunk_size + 1))
+            # print("the output dim ar currently", y_pred.shape)
+            # y_pred = torch.transpose(y_pred, 1, 2)
+
             loss = loss_funct(y_pred, batch_label)
             total_loss += loss
 
