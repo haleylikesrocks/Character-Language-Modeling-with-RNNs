@@ -297,7 +297,7 @@ def lm_preprocess(text, chunk_size, vocab):
     while count+chunk_size + 1 < len(text):
         chunk = indexed_text[count:count + chunk_size]
         chunk.insert(26, 0)
-        label = indexed_text[count + chunk_size + 1]
+        label = indexed_text[count :count + chunk_size + 1]
         data.append((chunk, label))
         count += 1
 
@@ -325,7 +325,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
     ## Model specifications
     model = RNNLanguageModel(vocab_index, dict_size=27, input_size=150, hidden_size=64, class_size=27)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
-    loss_funct = torch.nn.NLLLoss(reduce=True)
+    loss_funct = torch.nn.NLLLoss(reduction='mean')
 
 
     for epoch in range(num_epochs):
@@ -341,8 +341,8 @@ def train_lm(args, train_text, dev_text, vocab_index):
 
             model.zero_grad()
             y_pred = model.forward(batch_data, batch=True)
-            y_pred = torch.transpose(y_pred, 0, 1)
-            loss = loss_funct(y_pred[-1], batch_label)
+            y_pred = torch.transpose(y_pred, 1, 2)
+            loss = loss_funct(y_pred, batch_label)
             total_loss += loss
 
             # Computes the gradient and takes the optimizer step
