@@ -236,16 +236,17 @@ class UniformLanguageModel(LanguageModel):
 
 
 class RNNLanguageModel(nn.Module):
-    def __init__(self, vocab_index, dict_size=27, input_size=50, hidden_size=30, class_size=27): 
+    def __init__(self, vocab_index, dict_size=27, input_size=50, hidden_size=30, class_size=27, num_layers=2): 
         super(RNNLanguageModel, self).__init__()    
         self.word_embedding = nn.Embedding(dict_size, input_size)
         self.vocab = vocab_index
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True)
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.init_weight()
         self.hidden2tag = nn.Linear(hidden_size, class_size)
         self.soft = nn.LogSoftmax(-1)
+        self.num_layers = num_layers
 
     def init_weight(self):
         nn.init.xavier_normal_(self.rnn.weight_hh_l0).type('torch.FloatTensor')
@@ -263,8 +264,8 @@ class RNNLanguageModel(nn.Module):
 
 
         # Note: the hidden state and cell state are 1x1xdim tensor: num layers * num directions x batch_size x dimensionality
-        init_state = (torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'),
-                      torch.from_numpy(np.zeros((4, batch_size, self.hidden_size))).type('torch.FloatTensor'))
+        init_state = (torch.from_numpy(np.zeros((self.num_layers, batch_size, self.hidden_size))).type('torch.FloatTensor'),
+                      torch.from_numpy(np.zeros((self.num_layers, batch_size, self.hidden_size))).type('torch.FloatTensor'))
         # if not batch:
         #     embedded_input = embedded_input.unsqueeze(0)
         # print("the embedd dim ar currently", embedded_input.shape)
@@ -309,14 +310,14 @@ def lm_preprocess(text, chunk_size, vocab):
     for letter in text:
         indexed_text.append(vocab.index_of(letter))
         
-    while count+chunk_size + 1 < len(text):
-        chunk = indexed_text[count:count + chunk_size]
+    while count + chunk_size + 1 < len(text):
+        chunk = indexed_text[count:count + chunk_size] 
         chunk.insert(0, 26)
         label = indexed_text[count:count + chunk_size + 1]
         # print(chunk)
         # print(label)
         data.append((chunk, label))
-        count += chunk_size
+        count += int(chunk_size / 2)
 
     return data
     
@@ -331,16 +332,16 @@ def train_lm(args, train_text, dev_text, vocab_index):
     :return: an RNNLanguageModel instance trained on the given data
     """
     # Define hyper parmeters and model
-    num_epochs = 3
+    num_epochs = 8
     initial_learning_rate = 1e-4
     batch_size = 64
-    chunk_size = 10
+    chunk_size = 20
 
     ## Create Dataset
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
 
     ## Model specifications
-    model = RNNLanguageModel(vocab_index, dict_size=27, input_size=50, hidden_size=74, class_size=27)
+    model = RNNLanguageModel(vocab_index, dict_size=27, input_size=50, hidden_size=30, class_size=27, num_layers=2)
     optimizer = optim.Adam(model.parameters(), lr=initial_learning_rate)
     # loss_funct = torch.nn.NLLLoss(reduction='mean')
     loss_funct = torch.nn.CrossEntropyLoss(reduction='mean')
