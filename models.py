@@ -311,13 +311,15 @@ def lm_preprocess(text, chunk_size, vocab):
         indexed_text.append(vocab.index_of(letter))
         
     while count + chunk_size + 1 < len(text):
+        # word_chunk = text[count:count + chunk_size]
+        # word_label = text[count:count + chunk_size + 1]
         chunk = indexed_text[count:count + chunk_size] 
         chunk.insert(0, 26)
         label = indexed_text[count:count + chunk_size + 1]
-        # print(chunk)
-        # print(label)
+        # print(chunk, word_chunk)
+        # print(label, word_label)
         data.append((chunk, label))
-        count += int(chunk_size / 2)
+        count += 1
 
     return data
     
@@ -335,7 +337,7 @@ def train_lm(args, train_text, dev_text, vocab_index):
     num_epochs = 8
     initial_learning_rate = 1e-4
     batch_size = 64
-    chunk_size = 20
+    chunk_size = 30
 
     ## Create Dataset
     train_data = lm_preprocess(train_text, chunk_size, vocab_index)
